@@ -43,13 +43,19 @@ The app is configured to deploy to GitHub Pages when pushing to the `master` bra
 
 For the GitHub Actions workflow to work, you need to add the following secrets to your repository:
 - Go to Settings → Secrets and variables → Actions
+- Click "New repository secret"
 - Add the following repository secrets:
-  - `VITE_ADMIN_USER`
-  - `VITE_ADMIN_PASS`
-  - `VITE_REGULAR_USER`
-  - `VITE_REGULAR_PASS`
+  - `VITE_ADMIN_USER` - Your admin username
+  - `VITE_ADMIN_PASS` - Your admin password
+  - `VITE_REGULAR_USER` - Your regular user username
+  - `VITE_REGULAR_PASS` - Your regular user password
 
-These will be used during the build process for GitHub Pages deployment.
+**Important Notes:**
+- These secrets are automatically injected as environment variables during the build process
+- Only variables prefixed with `VITE_` are exposed to the client-side code (this is a Vite security feature)
+- The `.env` file should never be committed to the repository (it's in `.gitignore`)
+- For local development, create a `.env` file manually with the same variable names
+- Secrets are encrypted and only accessible during GitHub Actions runs
 
 ## Tech Stack
 

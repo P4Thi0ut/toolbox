@@ -16,6 +16,7 @@
       <div class="main-section">
         <TimelineView />
         <ProjectActivityGraph />
+        <CostAnalysisGraph />
       </div>
     </div>
   </div>
@@ -31,6 +32,7 @@ import MemberManager from '@/components/sprint/MemberManager.vue'
 import ProjectManager from '@/components/sprint/ProjectManager.vue'
 import TimelineView from '@/components/sprint/TimelineView.vue'
 import ProjectActivityGraph from '@/components/sprint/ProjectActivityGraph.vue'
+import CostAnalysisGraph from '@/components/sprint/CostAnalysisGraph.vue'
 import DataManager from '@/components/sprint/DataManager.vue'
 
 const sprintStore = useSprintStore()

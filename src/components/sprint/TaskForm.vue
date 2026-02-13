@@ -93,7 +93,7 @@
         </div>
 
         <TaskAssignment
-          :members="members"
+          :members="memberNames"
           :total-workload="form.workload"
           :assignments="form.assignments"
           @update:assignments="form.assignments = $event"
@@ -135,7 +135,7 @@ const emit = defineEmits(['close', 'saved'])
 const sprintStore = useSprintStore()
 const { validateWorkloadDistribution } = useSprintData()
 
-const { members, projects } = storeToRefs(sprintStore)
+const { memberNames, projects } = storeToRefs(sprintStore)
 
 const showNewProjectInput = ref(false)
 

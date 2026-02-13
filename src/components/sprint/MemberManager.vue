@@ -28,12 +28,27 @@
     <div class="member-list">
       <div
         v-for="member in members"
-        :key="member"
+        :key="getMemberName(member)"
         class="member-item"
       >
-        <span class="member-name">{{ member }}</span>
+        <div class="member-info">
+          <span class="member-name">{{ getMemberName(member) }}</span>
+          <div class="member-cost">
+            <label class="cost-label">Cost/day:</label>
+            <input
+              type="number"
+              :value="member.costPerDay || ''"
+              @input="updateCost(getMemberName(member), $event.target.value)"
+              @blur="handleCostBlur(getMemberName(member), $event.target.value)"
+              placeholder="Optional"
+              class="cost-input"
+              min="0"
+              step="0.01"
+            />
+          </div>
+        </div>
         <button
-          @click="removeMember(member)"
+          @click="removeMember(getMemberName(member))"
           class="delete-btn"
           title="Remove member"
         >
@@ -56,6 +71,7 @@ import { useSprintStore } from '@/stores/sprint'
 
 const sprintStore = useSprintStore()
 const { members } = storeToRefs(sprintStore)
+const { getMemberName } = sprintStore
 
 const showAddForm = ref(false)
 const newMemberName = ref('')
@@ -78,6 +94,19 @@ const cancelAdd = () => {
 const removeMember = (name) => {
   if (confirm(`Remove "${name}" from team members?`)) {
     sprintStore.removeMember(name)
+  }
+}
+
+const updateCost = (name, value) => {
+  // Allow empty input for clearing
+  sprintStore.updateMemberCost(name, value === '' ? null : value)
+}
+
+const handleCostBlur = (name, value) => {
+  // Validate and clean up on blur
+  const numValue = value === '' ? null : parseFloat(value)
+  if (numValue !== null && (isNaN(numValue) || numValue < 0)) {
+    sprintStore.updateMemberCost(name, null)
   }
 }
 
@@ -199,11 +228,51 @@ nextTick(() => {
   border: 1px solid #334155;
   border-radius: 6px;
   padding: 10px 12px;
+  gap: 12px;
+}
+
+.member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
 }
 
 .member-name {
   color: #f1f5f9;
   font-size: 14px;
+  font-weight: 500;
+}
+
+.member-cost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cost-label {
+  color: #94a3b8;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cost-input {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: #f1f5f9;
+  font-size: 12px;
+  width: 100px;
+}
+
+.cost-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.cost-input::placeholder {
+  color: #64748b;
 }
 
 .delete-btn {

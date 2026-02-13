@@ -19,19 +19,53 @@ export const useSprintStore = defineStore('sprint', () => {
     return currentSprint.value?.tasks || []
   })
 
+  // Helper to normalize member (handle both string and object formats)
+  const normalizeMember = (member) => {
+    if (typeof member === 'string') {
+      return { name: member, costPerDay: null }
+    }
+    return { name: member.name, costPerDay: member.costPerDay || null }
+  }
+
+  // Helper to get member name (handle both formats)
+  const getMemberName = (member) => {
+    return typeof member === 'string' ? member : member.name
+  }
+
+  // Helper to find member by name
+  const findMemberByName = (name) => {
+    return members.value.find(m => getMemberName(m) === name)
+  }
+
   // Member operations
-  const addMember = (name) => {
-    if (!members.value.includes(name)) {
-      members.value.push(name)
+  const addMember = (name, costPerDay = null) => {
+    const normalized = normalizeMember({ name, costPerDay })
+    if (!findMemberByName(normalized.name)) {
+      members.value.push(normalized)
     }
   }
 
   const removeMember = (name) => {
-    const index = members.value.indexOf(name)
+    const index = members.value.findIndex(m => getMemberName(m) === name)
     if (index > -1) {
       members.value.splice(index, 1)
     }
   }
+
+  const updateMemberCost = (name, costPerDay) => {
+    const member = findMemberByName(name)
+    if (member) {
+      const normalized = normalizeMember(member)
+      normalized.costPerDay = costPerDay !== null && costPerDay !== '' ? parseFloat(costPerDay) : null
+      const index = members.value.indexOf(member)
+      members.value[index] = normalized
+    }
+  }
+
+  // Computed: get member names array (for backward compatibility)
+  const memberNames = computed(() => {
+    return members.value.map(m => getMemberName(m))
+  })
 
   // Project operations
   const addProject = (name) => {
@@ -152,7 +186,7 @@ export const useSprintStore = defineStore('sprint', () => {
   const exportData = () => {
     return {
       referential: {
-        members: [...members.value],
+        members: members.value.map(m => normalizeMember(m)),
         projects: [...projects.value]
       },
       sprints: sprints.value.map(sprint => ({
@@ -164,7 +198,9 @@ export const useSprintStore = defineStore('sprint', () => {
 
   const importData = (data) => {
     if (data.referential) {
-      members.value = [...(data.referential.members || [])]
+      // Handle backward compatibility: convert string members to objects
+      const importedMembers = (data.referential.members || []).map(m => normalizeMember(m))
+      members.value = importedMembers
       projects.value = [...(data.referential.projects || [])]
     }
     
@@ -207,9 +243,11 @@ export const useSprintStore = defineStore('sprint', () => {
     // Computed
     currentSprint,
     currentSprintTasks,
+    memberNames,
     // Methods
     addMember,
     removeMember,
+    updateMemberCost,
     addProject,
     removeProject,
     createSprint,
@@ -222,7 +260,10 @@ export const useSprintStore = defineStore('sprint', () => {
     reorderTasksForMember,
     exportData,
     importData,
-    initialize
+    initialize,
+    // Helpers
+    getMemberName,
+    findMemberByName
   }
 })
 

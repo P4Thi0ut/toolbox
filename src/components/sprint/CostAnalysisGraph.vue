@@ -1,7 +1,10 @@
 <template>
-  <div class="project-activity-graph" v-if="currentSprint">
+  <div class="cost-analysis-graph">
     <div class="graph-header" @click="toggleExpanded">
-      <h3>Project Activity Overview</h3>
+      <div class="header-content">
+        <h3>Global Cost Analysis</h3>
+        <p class="graph-subtitle">Cost per project across all sprints</p>
+      </div>
       <button class="toggle-btn" :class="{ expanded: isExpanded }">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -12,13 +15,13 @@
       <div v-show="isExpanded" class="graph-content">
       <div class="graph-container">
         <div
-          v-for="projectData in projectStats"
+          v-for="projectData in projectCostStats"
           :key="projectData.project"
           class="project-bar"
         >
           <div class="project-label">
             <span class="project-name">{{ projectData.project }}</span>
-            <span class="project-total">{{ projectData.totalWorkload.toFixed(2) }}d</span>
+            <span class="project-total">{{ formatCurrency(projectData.totalCost) }}</span>
           </div>
           <div class="bar-container" :style="{ width: `${projectData.scaledWidth}%` }">
             <div
@@ -29,24 +32,32 @@
                 width: `${typeData.percentage}%`,
                 background: getTaskTypeGradient(typeData.type)
               }"
-              :title="`${typeData.type}: ${typeData.workload.toFixed(2)}d`"
+              :title="`${typeData.type}: ${formatCurrency(typeData.cost)}`"
             >
               <span v-if="typeData.percentage > 5" class="segment-label">
-                {{ typeData.type }} ({{ typeData.workload.toFixed(1) }}d)
+                {{ typeData.type }} ({{ formatCurrency(typeData.cost) }})
               </span>
             </div>
           </div>
           <div class="project-meta">
-            <span class="task-count">{{ projectData.taskCount }} task(s)</span>
+            <span class="task-count">{{ projectData.taskCount }} task(s) across {{ projectData.sprintCount }} sprint(s)</span>
             <div class="member-info">
               <span class="member-count">{{ projectData.memberCount }} member(s):</span>
               <span class="member-names">{{ projectData.memberNames.join(', ') }}</span>
             </div>
+            <div class="cost-breakdown">
+              <span class="cost-label">Total days: {{ projectData.totalDays.toFixed(2) }}d</span>
+            </div>
           </div>
         </div>
       </div>
-      <div v-if="projectStats.length === 0" class="empty-state">
-        No project activity data available. Add tasks to see the graph.
+      <div v-if="projectCostStats.length === 0" class="empty-state">
+        <p>No cost data available.</p>
+        <p class="empty-hint">Add cost per day to team members and create tasks to see cost analysis.</p>
+      </div>
+      <div v-if="hasNoCostData && projectCostStats.length === 0" class="empty-state">
+        <p>No members have cost per day configured.</p>
+        <p class="empty-hint">Set cost per day for team members in the configuration panel to see cost analysis.</p>
       </div>
       </div>
     </transition>
@@ -60,7 +71,8 @@ import { useSprintStore } from '@/stores/sprint'
 import { getTaskTypeGradient } from '@/utils/timeline'
 
 const sprintStore = useSprintStore()
-const { currentSprint, currentSprintTasks, memberNames } = storeToRefs(sprintStore)
+const { sprints, members, memberNames } = storeToRefs(sprintStore)
+const { getMemberName, findMemberByName } = sprintStore
 
 const isExpanded = ref(false)
 
@@ -68,61 +80,105 @@ const toggleExpanded = () => {
   isExpanded.value = !isExpanded.value
 }
 
-const projectStats = computed(() => {
-  if (!currentSprint.value || !currentSprintTasks.value.length) return []
+// Check if any member has cost data
+const hasNoCostData = computed(() => {
+  return members.value.length > 0 && 
+    !members.value.some(m => {
+      const normalized = typeof m === 'string' ? { name: m, costPerDay: null } : m
+      return normalized.costPerDay !== null && normalized.costPerDay !== undefined
+    })
+})
 
-  // Group tasks by project
+// Get member cost per day
+const getMemberCost = (memberName) => {
+  const member = findMemberByName(memberName)
+  return member && member.costPerDay !== null && member.costPerDay !== undefined 
+    ? member.costPerDay 
+    : 0
+}
+
+// Format currency (simple formatter, can be enhanced)
+const formatCurrency = (amount) => {
+  if (amount === 0 || isNaN(amount)) return '€0'
+  return `€${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+const projectCostStats = computed(() => {
+  if (!sprints.value || sprints.value.length === 0) return []
+
+  // Group tasks by project across all sprints
   const projectMap = new Map()
 
-  currentSprintTasks.value.forEach(task => {
-    const project = task.project || 'Unassigned'
-    
-    if (!projectMap.has(project)) {
-      projectMap.set(project, {
-        project,
-        tasks: [],
-        totalWorkload: 0,
-        byType: new Map(),
-        members: new Set()
+  sprints.value.forEach(sprint => {
+    if (!sprint.tasks || !Array.isArray(sprint.tasks)) return
+
+    sprint.tasks.forEach(task => {
+      const project = task.project || 'Unassigned'
+      
+      if (!projectMap.has(project)) {
+        projectMap.set(project, {
+          project,
+          tasks: [],
+          sprints: new Set(),
+          totalCost: 0,
+          totalDays: 0,
+          byType: new Map(),
+          members: new Set()
+        })
+      }
+
+      const projectData = projectMap.get(project)
+      projectData.tasks.push(task)
+      projectData.sprints.add(sprint.id)
+
+      // Calculate cost for this task
+      let taskCost = 0
+      let taskDays = 0
+
+      task.assignments.forEach(assignment => {
+        const memberCost = getMemberCost(assignment.memberId)
+        const memberWorkload = assignment.workload || 0
+        taskCost += memberCost * memberWorkload
+        taskDays += memberWorkload
+        projectData.members.add(assignment.memberId)
       })
-    }
 
-    const projectData = projectMap.get(project)
-    projectData.tasks.push(task)
-    projectData.totalWorkload += task.workload
+      projectData.totalCost += taskCost
+      projectData.totalDays += taskDays
 
-    // Track by type
-    if (!projectData.byType.has(task.type)) {
-      projectData.byType.set(task.type, {
-        type: task.type,
-        workload: 0
-      })
-    }
-    projectData.byType.get(task.type).workload += task.workload
-
-    // Track members
-    task.assignments.forEach(assignment => {
-      projectData.members.add(assignment.memberId)
+      // Track by type
+      if (!projectData.byType.has(task.type)) {
+        projectData.byType.set(task.type, {
+          type: task.type,
+          cost: 0
+        })
+      }
+      projectData.byType.get(task.type).cost += taskCost
     })
   })
 
-  // Get all projects and find max workload for scaling
-  const allProjects = Array.from(projectMap.values())
-  const maxWorkload = Math.max(...allProjects.map(p => p.totalWorkload), 1)
+  // Filter out projects with no cost data
+  const projectsWithCost = Array.from(projectMap.values())
+    .filter(p => p.totalCost > 0)
+
+  if (projectsWithCost.length === 0) return []
+
+  // Get max cost for scaling
+  const maxCost = Math.max(...projectsWithCost.map(p => p.totalCost), 1)
 
   // Convert to array and calculate percentages and scaled width
-  return allProjects
+  return projectsWithCost
     .map(projectData => {
-      const totalWorkload = projectData.totalWorkload
+      const totalCost = projectData.totalCost
       const byType = Array.from(projectData.byType.values())
         .map(typeData => ({
           ...typeData,
-          percentage: totalWorkload > 0 ? (typeData.workload / totalWorkload) * 100 : 0
+          percentage: totalCost > 0 ? (typeData.cost / totalCost) * 100 : 0
         }))
-        .sort((a, b) => b.workload - a.workload)
+        .sort((a, b) => b.cost - a.cost)
 
-      // Calculate scaled width (min 20%, max 100%, proportional to max workload)
-      const scaleFactor = maxWorkload > 0 ? totalWorkload / maxWorkload : 0
+      // Calculate scaled width (min 20%, max 100%, proportional to max cost)
+      const scaleFactor = maxCost > 0 ? totalCost / maxCost : 0
       const scaledWidth = Math.max(20, Math.min(100, 20 + (scaleFactor * 80)))
 
       // Check if all members worked on this project
@@ -134,20 +190,22 @@ const projectStats = computed(() => {
 
       return {
         project: projectData.project,
-        totalWorkload,
+        totalCost,
+        totalDays: projectData.totalDays,
         taskCount: projectData.tasks.length,
+        sprintCount: projectData.sprints.size,
         memberCount: projectData.members.size,
         memberNames: hasAllMembers ? ['Everybody'] : projectMembers.sort(),
         byType,
         scaledWidth
       }
     })
-    .sort((a, b) => b.totalWorkload - a.totalWorkload)
+    .sort((a, b) => b.totalCost - a.totalCost)
 })
 </script>
 
 <style scoped>
-.project-activity-graph {
+.cost-analysis-graph {
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 8px;
@@ -170,10 +228,20 @@ const projectStats = computed(() => {
   opacity: 0.8;
 }
 
+.header-content {
+  flex: 1;
+}
+
 .graph-header h3 {
   color: #f1f5f9;
   font-size: 20px;
   font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.graph-subtitle {
+  color: #94a3b8;
+  font-size: 14px;
   margin: 0;
 }
 
@@ -236,9 +304,9 @@ const projectStats = computed(() => {
 }
 
 .project-total {
-  color: #94a3b8;
-  font-size: 13px;
-  font-weight: 500;
+  color: #10b981;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .bar-container {
@@ -304,11 +372,31 @@ const projectStats = computed(() => {
   font-size: 11px;
 }
 
+.cost-breakdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cost-label {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
 .empty-state {
   text-align: center;
   padding: 40px 20px;
   color: #94a3b8;
   font-size: 14px;
+}
+
+.empty-state p {
+  margin: 8px 0;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .collapse-enter-active,

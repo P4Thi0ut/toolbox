@@ -167,8 +167,7 @@ const handleDragEnd = (event) => {
 
 .task-label {
   font-weight: 500;
-  line-height: 1.3;
-  overflow: hidden;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -176,8 +175,6 @@ const handleDragEnd = (event) => {
 .task-project {
   font-size: 10px;
   opacity: 0.85;
-  margin-top: 2px;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-style: italic;
@@ -187,7 +184,7 @@ const handleDragEnd = (event) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: 10px;
   opacity: 0.9;
 }

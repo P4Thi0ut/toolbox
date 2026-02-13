@@ -122,7 +122,6 @@ const handleLogout = () => {
 
 .sidebar-nav {
   flex: 1;
-  padding: 12px 12px;
   overflow-y: auto;
 }
 
@@ -133,7 +132,6 @@ const handleLogout = () => {
   padding: 10px 16px;
   color: #94a3b8;
   text-decoration: none;
-  border-radius: 6px;
   margin-bottom: 2px;
   transition: all 0.2s;
   font-size: 14px;

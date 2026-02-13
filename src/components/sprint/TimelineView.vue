@@ -26,7 +26,7 @@
         />
         <div class="timeline-body">
           <TimelineRow
-            v-for="member in members"
+            v-for="member in memberNames"
             :key="member"
             :member="member"
             :tasks="currentSprintTasks"
@@ -62,7 +62,7 @@ import TaskForm from './TaskForm.vue'
 const sprintStore = useSprintStore()
 
 // Use storeToRefs to maintain reactivity
-const { currentSprint, currentSprintTasks, members } = storeToRefs(sprintStore)
+const { currentSprint, currentSprintTasks, memberNames } = storeToRefs(sprintStore)
 
 const showTaskForm = ref(false)
 const selectedTask = ref(null)

@@ -24,6 +24,11 @@ const router = createRouter({
           path: 'sprint-activity',
           name: 'sprint-activity',
           component: () => import('@/views/SprintActivityView.vue')
+        },
+        {
+          path: 'diff-checker',
+          name: 'diff-checker',
+          component: () => import('@/views/DiffCheckerView.vue')
         }
       ]
     }

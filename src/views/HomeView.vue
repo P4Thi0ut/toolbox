@@ -10,6 +10,11 @@
         <h3>Sprint Activity</h3>
         <p>Track team sprint activities and workload</p>
       </router-link>
+      <router-link :to="{ name: 'diff-checker' }" class="tool-card">
+        <div class="tool-icon">🔀</div>
+        <h3>Diff Checker</h3>
+        <p>Compare and merge demo/prod config files</p>
+      </router-link>
       <div class="tool-card">
         <div class="tool-icon">📊</div>
         <h3>Analytics</h3>

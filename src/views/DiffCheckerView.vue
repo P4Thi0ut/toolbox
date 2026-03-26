@@ -86,7 +86,7 @@
               <tr
                 v-for="(row, idx) in rows"
                 :key="idx"
-                :class="['diff-row', rowClass(row)]"
+                :class="['diff-row', rowClass(row), hunkClass(idx)]"
               >
                 <!-- Left side -->
                 <td class="line-num" :class="row.left.type">
@@ -97,34 +97,39 @@
                   <span class="code-text">{{ row.left.content }}</span>
                 </td>
 
-                <!-- Action buttons -->
-                <td class="action-cell">
-                  <template v-if="hasConflict(row)">
-                    <button
-                      v-if="!resolutions[idx] || resolutions[idx] !== 'left'"
-                      class="accept-btn accept-left"
-                      @click="resolve(idx, 'left')"
-                      title="Use left (demo)"
-                    >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <span v-if="resolutions[idx]" class="resolved-badge" :class="resolutions[idx]">
-                      {{ resolutions[idx] === 'left' ? 'L' : 'R' }}
-                    </span>
-                    <button
-                      v-if="!resolutions[idx] || resolutions[idx] !== 'right'"
-                      class="accept-btn accept-right"
-                      @click="resolve(idx, 'right')"
-                      title="Use right (prod)"
-                    >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </template>
+                <!-- Action buttons — one per hunk, shown on the middle row -->
+                <td
+                  v-if="isHunkAnchor(idx)"
+                  class="action-cell"
+                  :rowspan="getHunkSize(idx)"
+                >
+                  <button
+                    v-if="!hunkResolutions[rowToHunk[idx]] || hunkResolutions[rowToHunk[idx]] !== 'left'"
+                    class="accept-btn accept-left"
+                    @click="resolveHunk(rowToHunk[idx], 'left')"
+                    title="Use left (demo)"
+                  >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <span v-if="hunkResolutions[rowToHunk[idx]]" class="resolved-badge" :class="hunkResolutions[rowToHunk[idx]]">
+                    {{ hunkResolutions[rowToHunk[idx]] === 'left' ? 'L' : 'R' }}
+                  </span>
+                  <button
+                    v-if="!hunkResolutions[rowToHunk[idx]] || hunkResolutions[rowToHunk[idx]] !== 'right'"
+                    class="accept-btn accept-right"
+                    @click="resolveHunk(rowToHunk[idx], 'right')"
+                    title="Use right (prod)"
+                  >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
                 </td>
+                <!-- Empty cell for equal rows (no conflict) -->
+                <td v-else-if="!hasConflict(row)" class="action-cell"></td>
+                <!-- Rows inside a hunk but not the anchor: no <td> emitted (covered by rowspan) -->
 
                 <!-- Right side -->
                 <td class="line-num" :class="row.right.type">
@@ -171,7 +176,37 @@ const copied = ref(false)
 
 const ops = ref([])
 const rows = ref([])
-const resolutions = reactive({})
+
+// Hunk data: computed after rows change
+// hunks: array of { id, startIdx, endIdx } (consecutive changed rows)
+// rowToHunk: map rowIdx -> hunkId (only for conflict rows)
+const hunks = ref([])
+const rowToHunk = reactive({})
+const hunkResolutions = reactive({})
+
+function buildHunks() {
+  const h = []
+  Object.keys(rowToHunk).forEach(k => delete rowToHunk[k])
+  Object.keys(hunkResolutions).forEach(k => delete hunkResolutions[k])
+
+  let i = 0
+  while (i < rows.value.length) {
+    if (hasConflict(rows.value[i])) {
+      const start = i
+      while (i < rows.value.length && hasConflict(rows.value[i])) {
+        i++
+      }
+      const hunkId = h.length
+      h.push({ id: hunkId, startIdx: start, endIdx: i - 1 })
+      for (let j = start; j < i; j++) {
+        rowToHunk[j] = hunkId
+      }
+    } else {
+      i++
+    }
+  }
+  hunks.value = h
+}
 
 const stats = computed(() => {
   let added = 0, removed = 0, equal = 0
@@ -186,8 +221,7 @@ const stats = computed(() => {
 function compare() {
   ops.value = computeDiff(leftText.value, rightText.value)
   rows.value = buildSideBySideRows(ops.value)
-  // Clear resolutions
-  Object.keys(resolutions).forEach(k => delete resolutions[k])
+  buildHunks()
   showDiff.value = true
   showResult.value = false
 }
@@ -213,44 +247,57 @@ function rowClass(row) {
   return ''
 }
 
-function resolve(idx, side) {
-  resolutions[idx] = side
+function hunkClass(idx) {
+  const hId = rowToHunk[idx]
+  if (hId === undefined) return ''
+  const res = hunkResolutions[hId]
+  if (res === 'left') return 'hunk-resolved-left'
+  if (res === 'right') return 'hunk-resolved-right'
+  return ''
+}
+
+// Returns true for the first row in each hunk (the one that renders the rowspan td)
+function isHunkAnchor(idx) {
+  const hId = rowToHunk[idx]
+  if (hId === undefined) return false
+  return hunks.value[hId].startIdx === idx
+}
+
+function getHunkSize(idx) {
+  const hId = rowToHunk[idx]
+  const hunk = hunks.value[hId]
+  return hunk.endIdx - hunk.startIdx + 1
+}
+
+function resolveHunk(hunkId, side) {
+  hunkResolutions[hunkId] = side
 }
 
 function acceptAllLeft() {
-  rows.value.forEach((row, idx) => {
-    if (hasConflict(row)) resolutions[idx] = 'left'
-  })
+  hunks.value.forEach(h => { hunkResolutions[h.id] = 'left' })
 }
 
 function acceptAllRight() {
-  rows.value.forEach((row, idx) => {
-    if (hasConflict(row)) resolutions[idx] = 'right'
-  })
+  hunks.value.forEach(h => { hunkResolutions[h.id] = 'right' })
 }
 
 const unresolvedCount = computed(() => {
-  let count = 0
-  rows.value.forEach((row, idx) => {
-    if (hasConflict(row) && !resolutions[idx]) count++
-  })
-  return count
+  return hunks.value.filter(h => !hunkResolutions[h.id]).length
 })
 
 const mergedResult = computed(() => {
   const lines = []
   rows.value.forEach((row, idx) => {
     if (!hasConflict(row)) {
-      // Equal line
       lines.push(row.left.content)
     } else {
-      const choice = resolutions[idx]
+      const hId = rowToHunk[idx]
+      const choice = hunkResolutions[hId]
       if (choice === 'left') {
         if (row.left.type !== 'empty') lines.push(row.left.content)
       } else if (choice === 'right') {
         if (row.right.type !== 'empty') lines.push(row.right.content)
       } else {
-        // Unresolved - show both with markers
         if (row.left.type !== 'empty') lines.push(`<<<< LEFT: ${row.left.content}`)
         if (row.right.type !== 'empty') lines.push(`>>>> RIGHT: ${row.right.content}`)
       }
@@ -265,7 +312,6 @@ async function copyResult() {
     copied.value = true
     setTimeout(() => { copied.value = false }, 2000)
   } catch {
-    // Fallback
     const ta = document.createElement('textarea')
     ta.value = mergedResult.value
     document.body.appendChild(ta)
@@ -620,14 +666,25 @@ async function copyResult() {
   border-right: 1px solid #334155;
 }
 
+/* ── Hunk resolved highlight ── */
+.hunk-resolved-left td.removed,
+.hunk-resolved-left td.empty {
+  opacity: 0.4;
+}
+
+.hunk-resolved-right td.added,
+.hunk-resolved-right td.empty {
+  opacity: 0.4;
+}
+
 /* ── Action Buttons ── */
 .action-cell {
   text-align: center;
   width: 50px;
   min-width: 50px;
   padding: 0 2px !important;
-  display: table-cell;
   vertical-align: middle;
+  background: #0f172a;
 }
 
 .accept-btn {
